@@ -1,11 +1,9 @@
-//go:build linux || windows
-
 package main
 
 import (
 	"borzGBC/pkg/gbc"
-	"bytes"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -39,6 +38,11 @@ type serialSync struct {
 	rxSB, rxSC       chan uint8
 	txSB, txSC       chan uint8
 	txInput, rxInput chan uint8
+}
+
+type serialRemote struct {
+	address  string
+	roomName string
 }
 
 func makeSerialSync() *serialSync {
@@ -335,8 +339,8 @@ func pow2(n int) int {
 	return result
 }
 
-func (pl *SDLPlugin) initializeSerialServer(console *gbc.Console, serialServer string) error {
-	addr, err := net.ResolveTCPAddr("tcp4", serialServer)
+func (pl *SDLPlugin) initializeSerialServer(console *gbc.Console, serialRemote serialRemote) error {
+	addr, err := net.ResolveTCPAddr("tcp4", serialRemote.address)
 	if err != nil {
 		return err
 	}
@@ -345,93 +349,170 @@ func (pl *SDLPlugin) initializeSerialServer(console *gbc.Console, serialServer s
 		return err
 	}
 
-	// handshake
-	handshakeVal := []byte("serialgbc")
-	_, err = conn.Write(handshakeVal)
-	if err != nil {
-		return err
-	}
-	handshake, err := io.ReadAll(io.LimitReader(conn, int64(len(handshakeVal))))
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(handshake, handshakeVal) {
-		return fmt.Errorf("invalid handshake")
-	}
-
-	// send my ROM
-	romDataSize := uint32(len(console.ROM))
-	romDataSizeBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(romDataSizeBuf, romDataSize)
-	_, err = conn.Write(romDataSizeBuf)
-	if err != nil {
-		return err
-	}
-	_, err = conn.Write(console.ROM)
+	// send room name
+	roomNameBuf := make([]byte, 40)
+	copy(roomNameBuf, []byte(serialRemote.roomName))
+	_, err = conn.Write(roomNameBuf)
 	if err != nil {
 		return err
 	}
 
-	// receive peer ROM
-	romDataSizeBuf, err = io.ReadAll(io.LimitReader(conn, 4))
-	if err != nil {
-		return err
-	}
-	romDataSize = binary.BigEndian.Uint32(romDataSizeBuf)
-	romData, err := io.ReadAll(io.LimitReader(conn, int64(romDataSize)))
-	if err != nil {
-		return err
-	}
-	f, err := os.CreateTemp("", "borzgbc-companion-rom-")
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(romData)
-	if err != nil {
-		return err
-	}
-	f.Close()
+	fmt.Printf("Connected to serial server, waiting for peer...\n")
+	fmt.Printf("ROOM NAME (to share): %s\n", serialRemote.roomName)
 
-	// send my STATE
-	savData := console.SaveState()
-	savDataSizeBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(savDataSizeBuf, uint32(len(savData)))
-	_, err = conn.Write(savDataSizeBuf)
-	if err != nil {
-		return err
-	}
-	_, err = conn.Write(savData)
-	if err != nil {
-		return err
+	// wait of peers
+	waitByte := make([]byte, 1)
+	var peerNum byte
+	for {
+		_, err = io.ReadFull(conn, waitByte)
+		if err != nil {
+			return err
+		}
+		if waitByte[0] == byte(43) {
+			// Read peer number
+			peerNumBuf := make([]byte, 1)
+			_, err = io.ReadFull(conn, peerNumBuf)
+			if err != nil {
+				return err
+			}
+			peerNum = peerNumBuf[0]
+			break
+		}
 	}
 
-	// receive peer STATE
-	savDataSizeBuf, err = io.ReadAll(io.LimitReader(conn, 4))
-	if err != nil {
-		return err
-	}
-	savDataSize := binary.BigEndian.Uint32(savDataSizeBuf)
-	savData, err = io.ReadAll(io.LimitReader(conn, int64(savDataSize)))
-	if err != nil {
-		return err
+	fmt.Printf("Both peers connected (I am peer%d), exchanging data...\n", peerNum)
+
+	// Exchange ROM and STATE - peer1 sends first, peer2 receives first to avoid deadlock
+	var peerRomData []byte
+	var peerSavData []byte
+
+	if peerNum == 1 {
+		// Peer1: send ROM, receive ROM, send STATE, receive STATE
+		romDataSize := uint32(len(console.ROM))
+		romDataSizeBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(romDataSizeBuf, romDataSize)
+		_, err = conn.Write(romDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Write(console.ROM)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("ROM sent (%d bytes)...\n", romDataSize+4)
+
+		peerRomDataSizeBuf := make([]byte, 4)
+		_, err = io.ReadFull(conn, peerRomDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		peerRomDataSize := binary.BigEndian.Uint32(peerRomDataSizeBuf)
+		peerRomData = make([]byte, peerRomDataSize)
+		_, err = io.ReadFull(conn, peerRomData)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("ROM received... (%d bytes)\n", peerRomDataSize+4)
+
+		savData := console.SaveState()
+		savDataSizeBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(savDataSizeBuf, uint32(len(savData)))
+		_, err = conn.Write(savDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Write(savData)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("STATE sent (%d bytes)...\n", len(savData)+4)
+
+		peerSavDataSizeBuf := make([]byte, 4)
+		_, err = io.ReadFull(conn, peerSavDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		peerSavDataSize := binary.BigEndian.Uint32(peerSavDataSizeBuf)
+		peerSavData = make([]byte, peerSavDataSize)
+		_, err = io.ReadFull(conn, peerSavData)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("STATE received... (%d bytes)\n", peerSavDataSize+4)
+	} else {
+		// Peer2: receive ROM, send ROM, receive STATE, send STATE
+		peerRomDataSizeBuf := make([]byte, 4)
+		_, err = io.ReadFull(conn, peerRomDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		peerRomDataSize := binary.BigEndian.Uint32(peerRomDataSizeBuf)
+		peerRomData = make([]byte, peerRomDataSize)
+		_, err = io.ReadFull(conn, peerRomData)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("ROM received... (%d bytes)\n", peerRomDataSize+4)
+
+		romDataSize := uint32(len(console.ROM))
+		romDataSizeBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(romDataSizeBuf, romDataSize)
+		_, err = conn.Write(romDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Write(console.ROM)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("ROM sent (%d bytes)...\n", romDataSize+4)
+
+		peerSavDataSizeBuf := make([]byte, 4)
+		_, err = io.ReadFull(conn, peerSavDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		peerSavDataSize := binary.BigEndian.Uint32(peerSavDataSizeBuf)
+		peerSavData = make([]byte, peerSavDataSize)
+		_, err = io.ReadFull(conn, peerSavData)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("STATE received... (%d bytes)\n", peerSavDataSize+4)
+
+		savData := console.SaveState()
+		savDataSizeBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(savDataSizeBuf, uint32(len(savData)))
+		_, err = conn.Write(savDataSizeBuf)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Write(savData)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("STATE sent (%d bytes)...\n", len(savData)+4)
 	}
 
 	// initialize peer console
 	pl.serial = makeSerialSync()
 	pl.serial.remote = conn
-	pl.serial.companion, err = gbc.MakeConsole(romData, pl.serial)
+	pl.serial.companion, err = gbc.MakeConsole(peerRomData, pl.serial)
 	if err != nil {
 		return err
 	}
-	err = pl.serial.companion.LoadState(savData)
+	err = pl.serial.companion.LoadState(peerSavData)
 	if err != nil {
 		return err
 	}
 
+	fmt.Printf("Companion console initialized...\n")
+
 	// start the network sync loop
 	go func() {
+		rawRXData := make([]byte, 1)
 		for pl.serial.running {
-			rawRXData, err := io.ReadAll(io.LimitReader(pl.serial.remote, 1))
+			_, err := io.ReadFull(pl.serial.remote, rawRXData)
 			if err != nil || len(rawRXData) == 0 {
 				break
 			}
@@ -490,10 +571,10 @@ func loadState(rom string, console *gbc.Console, n int) error {
 	return console.LoadState(data)
 }
 
-func (pl *SDLPlugin) Run(rom string, console *gbc.Console, serialServer string) error {
+func (pl *SDLPlugin) Run(rom string, console *gbc.Console, serialRemote serialRemote) error {
 	// serial server
-	if serialServer != "" {
-		if err := pl.initializeSerialServer(console, serialServer); err != nil {
+	if serialRemote.address != "" {
+		if err := pl.initializeSerialServer(console, serialRemote); err != nil {
 			return fmt.Errorf("unable to initialize serial client: %s", err)
 		}
 	}
@@ -650,7 +731,7 @@ func (pl *SDLPlugin) Run(rom string, console *gbc.Console, serialServer string) 
 			}
 		}
 
-		if serialServer != "" {
+		if serialRemote.address != "" {
 			if pl.serial.running {
 				if syncCount == 0 {
 					pl.serial.txInput <- currentInput.Serialize()
@@ -667,7 +748,7 @@ func (pl *SDLPlugin) Run(rom string, console *gbc.Console, serialServer string) 
 				close(pl.serial.txInput)
 				close(pl.serial.txSB)
 				close(pl.serial.txSC)
-				serialServer = ""
+				serialRemote.address = ""
 			}
 		} else {
 			console.Input.BackState = currentInput
@@ -691,14 +772,23 @@ func (pl *SDLPlugin) Run(rom string, console *gbc.Console, serialServer string) 
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("missing ROM filename")
+	defaultRoomName := uuid.New().String()
+
+	serialServer := flag.String("serialServer", "", "serial server address (host:port)")
+	serialRoomName := flag.String("serialRoomName", "", "serial server room name")
+	flag.Parse()
+
+	if flag.NArg() != 1 {
+		fmt.Printf("Usage: %s [options] <path/to/rom>\n", os.Args[0])
 		return
 	}
-	remote := ""
-	if len(os.Args) > 2 {
-		remote = os.Args[2]
-		log.Printf("remote mode, connecting to %s\n", remote)
+
+	if *serialRoomName == "" {
+		serialRoomName = &defaultRoomName
+	}
+	remoteData := serialRemote{
+		address:  *serialServer,
+		roomName: *serialRoomName,
 	}
 
 	pl, err := MakeSDLPlugin( /* scaling factor */ 3)
@@ -708,7 +798,7 @@ func main() {
 	}
 	defer pl.Destroy()
 
-	romPath := os.Args[1]
+	romPath := flag.Args()[0]
 	rom, err := os.ReadFile(romPath)
 	if err != nil {
 		log.Printf("invalid rom: %s\n", err)
@@ -732,7 +822,7 @@ func main() {
 	console.Verbose = false
 	console.CPU.EnableDisas = false
 	console.PrintDebug = false
-	err = pl.Run(romPath, console, remote)
+	err = pl.Run(romPath, console, remoteData)
 	if err != nil {
 		log.Printf("unable to run the emulator: %s\n", err)
 	}
