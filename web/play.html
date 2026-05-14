@@ -1,9 +1,31 @@
+<!DOCTYPE html>
 <html>
 
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>borzgbc</title>
 
     <style>
+        :root {
+            color-scheme: dark;
+            --bg: #050811;
+            --bg-top: #10192f;
+            --panel: rgba(12, 18, 31, 0.9);
+            --panel-strong: rgba(17, 24, 40, 0.96);
+            --panel-border: rgba(143, 164, 224, 0.2);
+            --screen-border: rgba(164, 188, 255, 0.28);
+            --text: #eef2ff;
+            --muted: #9cabc8;
+            --accent: #86a6ff;
+            --accent-strong: #5e7cff;
+            --accent-soft: rgba(134, 166, 255, 0.14);
+            --danger: #ff8ea1;
+            --button-top: #25355f;
+            --button-bottom: #17223f;
+            --button-shadow: 0 16px 26px rgba(0, 0, 0, 0.35);
+        }
+
         * {
             -webkit-touch-callout: none;
             -webkit-user-select: none;
@@ -12,30 +34,215 @@
             -ms-user-select: none;
             user-select: none;
             touch-action: none;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at top, rgba(134, 166, 255, 0.14), transparent 30%),
+                radial-gradient(circle at bottom right, rgba(94, 124, 255, 0.14), transparent 24%),
+                linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 48%, #02040a 100%);
+            color: var(--text);
+        }
+
+        .container {
+            width: min(1100px, 100%);
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+            text-align: center;
+            touch-action: manipulation;
+        }
+
+        .header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(134, 166, 255, 0.12);
+            border: 1px solid rgba(134, 166, 255, 0.18);
+            color: #d5e1ff;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        #status {
+            margin: 0;
+            min-height: 1.4em;
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: rgba(10, 16, 28, 0.82);
+            border: 1px solid rgba(143, 164, 224, 0.14);
+            color: var(--muted);
+            font-size: 14px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .screen-panel {
+            display: flex;
+            justify-content: center;
+            padding: 18px;
+            border-radius: 28px;
+            background: linear-gradient(180deg, rgba(17, 24, 40, 0.95) 0%, rgba(8, 12, 21, 0.98) 100%);
+            border: 1px solid var(--screen-border);
+            box-shadow: 0 28px 70px rgba(0, 0, 0, 0.5);
         }
 
         canvas {
-            height: 50%;
-            width: auto;
+            display: block;
+            width: min(90vw, 720px);
+            height: auto;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 1px solid rgba(155, 177, 238, 0.35);
+            border-radius: 18px;
+            background: #020202;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 16px 48px rgba(0, 0, 0, 0.45);
+        }
+
+        .helper {
+            margin: 16px auto 0;
+            max-width: 46rem;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .current-rom {
+            margin-top: 18px;
+            color: #d8e3ff;
+            font-weight: 600;
         }
 
         #inputContainer {
-            height: 50%;
-            width: auto;
+            margin: 26px auto 0;
+            max-width: 860px;
+            padding: 22px 16px 18px;
+            border-radius: 28px;
+            background: linear-gradient(180deg, rgba(14, 20, 34, 0.94) 0%, rgba(9, 13, 23, 0.94) 100%);
+            border: 1px solid var(--panel-border);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
         }
 
-        button {
-            padding: 15px 35px;
-            height: 120px;
-            font-size: 50px;
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
-            border-bottom-right-radius: 20px;
-            border-bottom-left-radius: 20px;
+        .controls {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 8px;
+            margin: 0 auto;
         }
 
         td {
-            padding: 5px 15px;
+            padding: 4px;
+            text-align: center;
+        }
+
+        .separator {
+            min-width: 110px;
+            color: rgba(156, 171, 200, 0.55);
+            font-size: 13px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+
+        button {
+            appearance: none;
+            min-width: 92px;
+            padding: 16px 24px;
+            height: 92px;
+            border: 1px solid rgba(164, 188, 255, 0.2);
+            border-radius: 24px;
+            background: linear-gradient(180deg, var(--button-top) 0%, var(--button-bottom) 100%);
+            color: var(--text);
+            font-size: clamp(24px, 4.4vw, 34px);
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            box-shadow: var(--button-shadow);
+            transition: transform 100ms ease, filter 100ms ease, box-shadow 100ms ease, border-color 100ms ease;
+        }
+
+        button:active {
+            transform: translateY(2px) scale(0.98);
+            filter: brightness(1.05);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+        }
+
+        #inputs2 button {
+            min-width: 150px;
+            height: 80px;
+            padding: 12px 22px;
+            font-size: clamp(18px, 3vw, 24px);
+            border-radius: 20px;
+        }
+
+        #speed {
+            background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+            color: #09111f;
+            border-color: rgba(255, 255, 255, 0.22);
+        }
+
+        #fatalLog {
+            margin: 22px auto 0;
+            max-width: 860px;
+            min-height: 1.2em;
+            padding: 0 6px;
+            color: var(--danger);
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        body.desktop .container {
+            padding-top: 36px;
+        }
+
+        @media (max-width: 720px) {
+            .container {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            .screen-panel,
+            #inputContainer {
+                border-radius: 22px;
+            }
+
+            button {
+                min-width: 78px;
+                height: 78px;
+                padding: 12px 18px;
+                border-radius: 20px;
+            }
+
+            #inputs2 button {
+                min-width: 108px;
+                height: 70px;
+            }
+
+            .separator {
+                min-width: 70px;
+                font-size: 11px;
+                letter-spacing: 0.1em;
+            }
         }
     </style>
 
@@ -64,7 +271,7 @@
             var prmarr = prmstr.split("&");
             for (var i = 0; i < prmarr.length; i++) {
                 var tmparr = prmarr[i].split("=");
-                params[tmparr[0]] = tmparr[1];
+                params[tmparr[0]] = decodeURIComponent(tmparr[1] || "");
             }
             return params;
         }
@@ -72,6 +279,51 @@
         function getSearchParameters() {
             var prmstr = window.location.search.substr(1);
             return prmstr != null && prmstr != "" ? transformToAssocArray(prmstr) : {};
+        }
+
+        function setStatus(message) {
+            document.getElementById("status").innerText = message;
+        }
+
+        function setRomLabel(message) {
+            document.getElementById("romLabel").innerText = message;
+        }
+
+        function showFatalError(message) {
+            document.getElementById("canvas").style.display = 'none';
+            hideInputs();
+            setStatus("Load failed");
+            document.getElementById("fatalLog").innerText = message;
+        }
+
+        function getROMNameFromPath(path) {
+            if (path == null || path == "") {
+                return "Bundled ROM";
+            }
+            var parts = path.split("/");
+            return parts[parts.length - 1] || path;
+        }
+
+        function resolveROM(params) {
+            if (params.rom === "upload") {
+                var uploadedRom = sessionStorage.getItem("uploadedRomData");
+                if (uploadedRom == null || uploadedRom == "") {
+                    throw new Error("No imported ROM found in this browser session. Go back and choose a .gb file again.");
+                }
+                return {
+                    data: uploadedRom,
+                    name: sessionStorage.getItem("uploadedRomName") || "Imported ROM"
+                };
+            }
+
+            var romPath = "./assets/rom.gb";
+            if (params.rom != null) {
+                romPath = params.rom;
+            }
+            return {
+                url: romPath,
+                name: getROMNameFromPath(romPath)
+            };
         }
 
         async function init_wasm() {
@@ -210,7 +462,7 @@
                 save_state();
             }
 
-            document.getElementById("status").innerText = (fullSpeed ? "SPEED MODE" : "") + " frame: " + animateCount;
+            document.getElementById("status").innerText = (fullSpeed ? "SPEED MODE" : "RUNNING") + " · frame " + animateCount;
             animateCount += 1;
             var msToSleep = fullSpeed ? 0 : emulator_end_timer();
             setTimeout(animate, msToSleep);
@@ -232,7 +484,7 @@
             // hide inputs on desktop
             var isMobile = navigator.userAgent.match(/(iPad)|(iPhone)|(iPod)|(android)|(webOS)/i)
             if (!isMobile) {
-                document.getElementById("canvas").style.height = '80%';
+                document.body.classList.add("desktop");
                 hideInputs();
             }
 
@@ -242,33 +494,47 @@
             canvas = document.getElementById("canvas");
             ctx = canvas.getContext('2d');
 
-            // rom
-            var rom = "./assets/rom.gb";
-            if (params.rom != null) {
-                rom = params.rom;
-            }
-            rom = await getRemoteBase64(rom);
-            romMD5 = CryptoJS.MD5(rom).toString();
-            console.log("romMD5: ", romMD5)
+            try {
+                var romSource = resolveROM(params);
+                var romData;
+                setRomLabel("ROM · " + romSource.name);
+                setStatus("Loading ROM…");
 
-            // load sav (if any)
-            var sav = localStorage.getItem(romMD5);
+                if (romSource.data != null) {
+                    romData = romSource.data;
+                } else {
+                    romData = await getRemoteBase64(romSource.url);
+                }
 
-            await init_wasm();
-            rawImageBuffer = emulator_init(rom);
-            if (rawImageBuffer == 0) {
-                console.log("Unable to initialize emulator");
-                return;
-            }
-            console.log("got raw image buffer ", rawImageBuffer);
-            if (sav != null) {
-                emulator_load_sav(sav);
-            }
+                romMD5 = CryptoJS.MD5(romData).toString();
+                console.log("romMD5: ", romMD5)
 
-            animate();
+                // load sav (if any)
+                var sav = localStorage.getItem(romMD5);
+
+                setStatus("Loading emulator…");
+                await init_wasm();
+                rawImageBuffer = emulator_init(romData);
+                if (rawImageBuffer == 0) {
+                    throw new Error("Unable to initialize emulator");
+                }
+                console.log("got raw image buffer ", rawImageBuffer);
+                if (sav != null) {
+                    emulator_load_sav(sav);
+                }
+
+                document.getElementById("fatalLog").innerText = "";
+                animate();
+            } catch (e) {
+                console.log(e);
+                showFatalError(e.message != null ? e.message : JSON.stringify(e));
+            }
         }
 
         function save_state() {
+            if (romMD5 == null || romMD5 == "" || typeof emulator_store_sav !== "function") {
+                return;
+            }
             var sav = emulator_store_sav();
             localStorage.setItem(romMD5, sav);
         }
@@ -290,14 +556,21 @@
 </head>
 
 <body>
-    <div class="container" style="touch-action: manipulation;">
-        <p id="status" align="center"></p>
-        <p align="center" style="touch-action: manipulation;">
-            <canvas id="canvas" width="160" height="144" style="border:1px solid #000000;"></canvas>
-        </p>
-        <br>
+    <div class="container">
+        <div class="header">
+            <div class="brand">borzgbc web player</div>
+            <p id="status">Loading emulator…</p>
+        </div>
+
+        <div class="screen-panel">
+            <canvas id="canvas" width="160" height="144"></canvas>
+        </div>
+
+        <p id="romLabel" class="helper current-rom">ROM · loading…</p>
+        <p class="helper">Keyboard: arrows = D-pad, Z = A, X = B, Enter = Start, Backspace = Select, F = Speed. On touch devices, use the controls below.</p>
+
         <div id="inputContainer">
-            <table id="inputs1" align="center">
+            <table id="inputs1" class="controls" align="center">
                 <tr>
                     <td> </td>
                     <td> <button type="button" ontouchstart="keydownHandler({'keyCode': 38})"
@@ -315,7 +588,7 @@
                     <td> </td>
                     <td> <button type="button" ontouchstart="keydownHandler({'keyCode': 39})"
                             ontouchend="keyupHandler({'keyCode': 39})">&gt;</button> </td>
-                    <td style="color: white;"> --------------------------- </td>
+                    <td class="separator">A / B</td>
                     <td> <button type="button" ontouchstart="keydownHandler({'keyCode': 88})"
                             ontouchend="keyupHandler({'keyCode': 88})">B</button> </td>
                     <td> <button type="button" ontouchstart="keydownHandler({'keyCode': 90})"
@@ -333,21 +606,20 @@
                     <td> </td>
                 </tr>
             </table>
-            <br> <br> <br>
-            <table id="inputs2" align="center">
+            <br> <br>
+            <table id="inputs2" class="controls" align="center">
                 <tr>
                     <td> <button type="button" ontouchstart="keydownHandler({'keyCode': 8})"
                             ontouchend="keyupHandler({'keyCode': 8})">SELECT</button> </td>
                     <td> <button id="speed" type="button" ontouchstart="keydownHandler({'keyCode': 70})">SPEED</button>
-                    </td>
                     </td>
                     <td> <button type="button" ontouchstart="keydownHandler({'keyCode': 13})"
                             ontouchend="keyupHandler({'keyCode': 13})">START</button> </td>
                 </tr>
             </table>
         </div>
+        <p id="fatalLog"></p>
     </div>
-    <p id="fatalLog"></p>
 </body>
 
 </html>
