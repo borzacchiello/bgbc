@@ -183,12 +183,20 @@ func TestMooneyeTimer_tim00(t *testing.T) {
 	runRomTest(t, "Mooneye/timer/tim00.gb", 1000)
 }
 
+func TestMooneyeTimer_tim01_div_trigger(t *testing.T) {
+	runRomTest(t, "Mooneye/timer/tim01_div_trigger.gb", 1000)
+}
+
 func TestMooneyeTimer_tim10(t *testing.T) {
 	runRomTest(t, "Mooneye/timer/tim10.gb", 1000)
 }
 
 func TestMooneyeTimer_tim11(t *testing.T) {
 	runRomTest(t, "Mooneye/timer/tim11.gb", 1000)
+}
+
+func TestMooneyeTimer_tima_reload(t *testing.T) {
+	runRomTest(t, "Mooneye/timer/tima_reload.gb", 1000)
 }
 
 func TestMooneyeMbc1_bits_bank1(t *testing.T) {
@@ -269,6 +277,14 @@ func TestMooneyeMbc5_rom_64Mb(t *testing.T) {
 
 func TestMooneyeMbc5_rom_512Kb(t *testing.T) {
 	runRomTest(t, "Mooneye/mbc5/rom_512kb.gb", 1000)
+}
+
+func TestMooneyeDaa(t *testing.T) {
+	runRomTest(t, "Mooneye/instr/daa.gb", 1000)
+}
+
+func TestMooneyeIePush(t *testing.T) {
+	runRomTest(t, "Mooneye/interrupts/ie_push.gb", 1000)
 }
 
 func TestMooneyeIntr_1_2(t *testing.T) {
