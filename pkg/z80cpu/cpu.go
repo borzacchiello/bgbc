@@ -26,11 +26,12 @@ type Z80Cpu struct {
 	// InterruptEnable and InterruptFlag regs
 	IE, IF uint8
 
-	branchWasTaken       bool
-	IsHalted             bool
-	IsStopped            bool
-	interruptsEnabled    bool
-	interruptEnableDelay uint8
+	branchWasTaken                 bool
+	IsHalted                       bool
+	IsStopped                      bool
+	UseExternalInterruptController bool
+	interruptsEnabled              bool
+	interruptEnableDelay           uint8
 
 	Interrupts []Z80Interrupt
 
@@ -129,6 +130,35 @@ func (cpu *Z80Cpu) SetInterrupt(mask uint8) {
 	cpu.IF |= mask
 }
 
+func (cpu *Z80Cpu) PendingInterrupts() uint8 {
+	return cpu.IE & cpu.IF & 0x1F
+}
+
+func (cpu *Z80Cpu) InterruptsEnabled() bool {
+	return cpu.interruptsEnabled
+}
+
+func (cpu *Z80Cpu) BeginInterruptDispatch() {
+	cpu.IsHalted = false
+	cpu.interruptsEnabled = false
+}
+
+func (cpu *Z80Cpu) SelectPendingInterrupt() (Z80Interrupt, bool) {
+	interruptValue := cpu.PendingInterrupts()
+	for _, interrupt := range cpu.Interrupts {
+		if interruptValue&interrupt.Mask != 0 {
+			return interrupt, true
+		}
+	}
+	return Z80Interrupt{}, false
+}
+
+func (cpu *Z80Cpu) DispatchInterrupt(interrupt Z80Interrupt) {
+	cpu.IF &= ^interrupt.Mask
+	cpu.StackPush16(cpu.PC)
+	cpu.PC = interrupt.Addr
+}
+
 func (cpu *Z80Cpu) fetchOpcode() uint8 {
 	opcode := cpu.Mem.Read(cpu.PC)
 	cpu.PC += 1
@@ -136,7 +166,7 @@ func (cpu *Z80Cpu) fetchOpcode() uint8 {
 }
 
 func (cpu *Z80Cpu) handleInterrupts() bool {
-	if cpu.IE&cpu.IF&0xF != 0 {
+	if cpu.PendingInterrupts() != 0 {
 		cpu.IsHalted = false
 	}
 
@@ -144,35 +174,22 @@ func (cpu *Z80Cpu) handleInterrupts() bool {
 		return false
 	}
 
-	interruptValue := cpu.IE & cpu.IF
-	if interruptValue == 0 {
+	interrupt, ok := cpu.SelectPendingInterrupt()
+	if !ok {
 		return false
 	}
 
-	cpu.IsHalted = false
-	cpu.StackPush16(cpu.PC)
-	cpu.interruptsEnabled = false
-
-	interruptWasFound := false
-	for _, interrupt := range cpu.Interrupts {
-		if interruptValue&interrupt.Mask != 0 {
-			cpu.IF &= ^interrupt.Mask
-			cpu.PC = interrupt.Addr
-			interruptWasFound = true
-			break
-		}
-	}
-
-	if !interruptWasFound {
-		panic("Invalid interrupt")
-	}
+	cpu.BeginInterruptDispatch()
+	cpu.DispatchInterrupt(interrupt)
 	return true
 }
 
 func (cpu *Z80Cpu) ExecOne() int {
-	inInterrupt := cpu.handleInterrupts()
-	if inInterrupt {
-		return 5
+	if !cpu.UseExternalInterruptController {
+		inInterrupt := cpu.handleInterrupts()
+		if inInterrupt {
+			return 5
+		}
 	}
 
 	if cpu.IsHalted {

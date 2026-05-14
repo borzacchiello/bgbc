@@ -635,6 +635,46 @@ func (ppu *Ppu) drawWindowLine() {
 	}
 }
 
+func (ppu *Ppu) countVisibleSpritesOnLine() int {
+	spriteHeight := 8
+	if ppu.SpriteSize() {
+		spriteHeight = 16
+	}
+
+	visible := 0
+	for i := 0; i < 40; i++ {
+		sprite := &ppu.sprites[i]
+		if !sprite.Ready {
+			continue
+		}
+		if (sprite.y > int(ppu.LY)) || (sprite.y+spriteHeight) <= int(ppu.LY) {
+			continue
+		}
+		visible += 1
+		if visible >= MAX_SPRITES {
+			break
+		}
+	}
+	return visible
+}
+
+func (ppu *Ppu) currentMode3Clocks() int {
+	clocks := CLOCKS_ACCESS_VRAM
+	clocks += int(ppu.SCX & 7)
+	if ppu.WindowEnabled() && ppu.WY <= ppu.LY && ppu.WX <= 166 {
+		clocks += 6
+	}
+	clocks += ppu.countVisibleSpritesOnLine() * 6
+	if clocks > 289 {
+		clocks = 289
+	}
+	return clocks
+}
+
+func (ppu *Ppu) currentHBlankClocks() int {
+	return 456 - CLOCKS_ACCESS_OAM - ppu.currentMode3Clocks()
+}
+
 func (ppu *Ppu) drawSprites() {
 	spriteHeight := 8
 	if ppu.SpriteSize() {
@@ -767,16 +807,18 @@ func (ppu *Ppu) Tick(ticks int) {
 			ppu.setMode(ACCESS_VRAM)
 		}
 	case ACCESS_VRAM:
-		if ppu.CycleCount >= CLOCKS_ACCESS_VRAM {
-			ppu.CycleCount %= CLOCKS_ACCESS_VRAM
+		clocksAccessVRAM := ppu.currentMode3Clocks()
+		if ppu.CycleCount >= clocksAccessVRAM {
+			ppu.CycleCount %= clocksAccessVRAM
 			ppu.setMode(HBLANK)
 			ppu.GBC.DMA.SignalHdma()
 
 			ppu.writeScanline()
 		}
 	case HBLANK:
-		if ppu.CycleCount >= CLOCKS_HBLANK {
-			ppu.CycleCount %= CLOCKS_HBLANK
+		clocksHBlank := ppu.currentHBlankClocks()
+		if ppu.CycleCount >= clocksHBlank {
+			ppu.CycleCount %= clocksHBlank
 
 			ppu.LY += 1
 			ppu.checkCoincidenceLY_LYC()
@@ -786,6 +828,9 @@ func (ppu *Ppu) Tick(ticks int) {
 			}
 
 			if ppu.LY == 144 {
+				if ppu.DisplayEnabled() && !ppu.statIRQActive() && ppu.oamInterrupt() {
+					ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
+				}
 				ppu.setMode(VBLANK)
 
 				ppu.FrameCount += 1

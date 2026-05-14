@@ -7,7 +7,7 @@ type Timer struct {
 	DIV            uint16
 	TIMA, TMA, TAC uint8
 
-	overflowPending       bool
+	overflowPending         bool
 	divCounter, timaCounter int
 }
 

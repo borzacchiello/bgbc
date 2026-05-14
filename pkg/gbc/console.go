@@ -508,6 +508,7 @@ func MakeConsole(rom []byte, frontend Frontend) (*Console, error) {
 	res.PPU = MakePpu(res, frontend)
 	res.APU = MakeApu(res, frontend)
 	res.CPU = z80cpu.MakeZ80Cpu(res)
+	res.CPU.UseExternalInterruptController = true
 	res.Input = MakeJoypad(res)
 	res.timer = MakeTimer(res)
 	res.serial = MakeSerial(res, frontend)
@@ -532,6 +533,58 @@ func (cons *Console) tickComponents(cpuTicks int) {
 	cons.Input.Tick(cpuTicks)
 }
 
+func (cons *Console) handleInterruptDispatch() int {
+	if cons.CPU.PendingInterrupts() == 0 {
+		return 0
+	}
+
+	cons.CPU.IsHalted = false
+	if !cons.CPU.InterruptsEnabled() {
+		return 0
+	}
+
+	cons.CPU.BeginInterruptDispatch()
+	cons.tickComponents(1)
+	cons.tickComponents(1)
+
+	pc := cons.CPU.PC
+	cons.CPU.SP -= 1
+	cons.CPU.Mem.Write(cons.CPU.SP, uint8(pc>>8))
+	cons.tickComponents(1)
+	interruptQueue := cons.CPU.IE & 0x1F
+
+	cons.CPU.SP -= 1
+	cons.CPU.Mem.Write(cons.CPU.SP, uint8(pc&0xFF))
+	cons.tickComponents(1)
+	interruptQueue &= cons.CPU.IF & 0x1F
+	if interruptQueue&InterruptLCDStat.Mask != 0 && interruptQueue&InterruptVBlank.Mask == 0 &&
+		cons.PPU.LY == 0x8F && cons.PPU.Mode == HBLANK &&
+		cons.PPU.currentHBlankClocks()-cons.PPU.CycleCount <= 128 {
+		interruptQueue |= InterruptVBlank.Mask
+	}
+
+	var interruptMask uint8 = 0
+	var interruptAddr uint16 = 0
+	if interruptQueue != 0 {
+		for _, interrupt := range cons.CPU.Interrupts {
+			if interruptQueue&interrupt.Mask != 0 {
+				interruptMask = interrupt.Mask
+				interruptAddr = interrupt.Addr
+				break
+			}
+		}
+	}
+
+	cons.tickComponents(1)
+	if interruptMask != 0 {
+		cons.CPU.IF &= ^interruptMask
+		cons.CPU.PC = interruptAddr
+	} else {
+		cons.CPU.PC = 0
+	}
+	return 5
+}
+
 func (cons *Console) innerStep() int {
 	totTicks := 0
 	if !cons.CPU.IsHalted {
@@ -540,6 +593,10 @@ func (cons *Console) innerStep() int {
 			cons.tickComponents(1)
 			totTicks += 1
 		}
+	}
+
+	if irqTicks := cons.handleInterruptDispatch(); irqTicks != 0 {
+		return totTicks + irqTicks
 	}
 
 	if cons.PrintDebug {
