@@ -279,6 +279,95 @@ func TestCallRet(t *testing.T) {
 	}
 }
 
+func TestEIIsDeferred(t *testing.T) {
+	memory := &TestMemory{}
+	memory.WriteBuffer(0, []uint8{
+		0xfb, // ei
+		0x00, // nop
+		0x76, // halt
+	})
+
+	cpu := MakeZ80Cpu(memory)
+	cpu.RegisterInterrupt(Z80Interrupt{Name: "vblank", Mask: 1, Addr: 0x40})
+	cpu.IE = 1
+	cpu.IF = 1
+
+	cpu.ExecOne()
+	if cpu.PC != 1 || cpu.interruptsEnabled || cpu.interruptEnableDelay != 1 {
+		t.Fatalf("after EI: PC=%04x IME=%v delay=%d", cpu.PC, cpu.interruptsEnabled, cpu.interruptEnableDelay)
+	}
+
+	cpu.ExecOne()
+	if cpu.PC != 2 || !cpu.interruptsEnabled || cpu.interruptEnableDelay != 0 {
+		t.Fatalf("after instruction following EI: PC=%04x IME=%v delay=%d", cpu.PC, cpu.interruptsEnabled, cpu.interruptEnableDelay)
+	}
+
+	cpu.ExecOne()
+	if cpu.PC != 0x40 {
+		t.Fatalf("interrupt was not taken after deferred EI, PC=%04x", cpu.PC)
+	}
+	if cpu.SP != 0xfd || memory.Read(0xfd) != 0x02 || memory.Read(0xfe) != 0x00 {
+		t.Fatalf("unexpected stack after interrupt: SP=%04x [%02x %02x]", cpu.SP, memory.Read(0xfd), memory.Read(0xfe))
+	}
+}
+
+func TestDICancelsDeferredEI(t *testing.T) {
+	memory := &TestMemory{}
+	memory.WriteBuffer(0, []uint8{
+		0xfb, // ei
+		0xf3, // di
+		0x76, // halt
+	})
+
+	cpu := MakeZ80Cpu(memory)
+	cpu.RegisterInterrupt(Z80Interrupt{Name: "vblank", Mask: 1, Addr: 0x40})
+	cpu.IE = 1
+	cpu.IF = 1
+
+	cpu.ExecOne()
+	cpu.ExecOne()
+	if cpu.interruptsEnabled || cpu.interruptEnableDelay != 0 {
+		t.Fatalf("DI did not cancel deferred EI: IME=%v delay=%d", cpu.interruptsEnabled, cpu.interruptEnableDelay)
+	}
+
+	cpu.ExecOne()
+	if !cpu.IsHalted || cpu.PC != 3 {
+		t.Fatalf("expected HALT to execute instead of taking interrupt: halted=%v PC=%04x", cpu.IsHalted, cpu.PC)
+	}
+}
+
+func TestRETIEnablesInterruptsImmediately(t *testing.T) {
+	memory := &TestMemory{}
+	memory.WriteBuffer(0, []uint8{
+		0x76, // halt
+	})
+	memory.WriteBuffer(0x40, []uint8{
+		0xd9, // reti
+	})
+
+	cpu := MakeZ80Cpu(memory)
+	cpu.RegisterInterrupt(Z80Interrupt{Name: "vblank", Mask: 1, Addr: 0x40})
+	cpu.interruptsEnabled = true
+	cpu.IE = 1
+	cpu.IF = 1
+
+	cpu.ExecOne()
+	if cpu.PC != 0x40 || cpu.interruptsEnabled {
+		t.Fatalf("expected interrupt dispatch to disable IME and jump to vector, PC=%04x IME=%v", cpu.PC, cpu.interruptsEnabled)
+	}
+
+	cpu.ExecOne()
+	if cpu.PC != 0 || !cpu.interruptsEnabled || cpu.interruptEnableDelay != 0 {
+		t.Fatalf("RETI did not restore PC/IME immediately: PC=%04x IME=%v delay=%d", cpu.PC, cpu.interruptsEnabled, cpu.interruptEnableDelay)
+	}
+
+	cpu.IF = 1
+	cpu.ExecOne()
+	if cpu.PC != 0x40 {
+		t.Fatalf("interrupt was not taken immediately after RETI, PC=%04x", cpu.PC)
+	}
+}
+
 func TestProgHLToHex(t *testing.T) {
 	var prog = []byte{
 		0x00, 0x00, 0x00, // 00: nop (x3)

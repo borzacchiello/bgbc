@@ -380,10 +380,40 @@ func (ppu *Ppu) WriteCRamObj(value uint8) {
 	}
 }
 
+func (ppu *Ppu) statIRQActive() bool {
+	if !ppu.DisplayEnabled() {
+		return false
+	}
+
+	if ppu.coincidenceFlag() && ppu.coincidenceInterrupt() {
+		return true
+	}
+
+	switch ppu.Mode {
+	case HBLANK:
+		return ppu.hblankInterrupt()
+	case VBLANK:
+		return ppu.vblankInterrupt()
+	case ACCESS_OAM:
+		return ppu.oamInterrupt()
+	default:
+		return false
+	}
+}
+
+func (ppu *Ppu) updateSTATInterrupt() {
+	active := ppu.statIRQActive()
+	if active && !ppu.wasModeInterruptTriggered {
+		ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
+	}
+	ppu.wasModeInterruptTriggered = active
+}
+
 func (ppu *Ppu) setMode(mode PpuMode) {
 	ppu.Mode = mode & 3
 	ppu.STAT &= ^uint8(3)
 	ppu.STAT |= uint8(ppu.Mode)
+	ppu.updateSTATInterrupt()
 }
 
 func (ppu *Ppu) setCoincidenceFlag(value bool) {
@@ -391,6 +421,7 @@ func (ppu *Ppu) setCoincidenceFlag(value bool) {
 	if value {
 		ppu.STAT |= 4
 	}
+	ppu.updateSTATInterrupt()
 }
 
 func getRGBFromColor(c uint8, palette uint8) uint32 {
@@ -709,10 +740,6 @@ func (ppu *Ppu) writeScanline() {
 
 func (ppu *Ppu) checkCoincidenceLY_LYC() {
 	ppu.setCoincidenceFlag(ppu.LYC == ppu.LY)
-
-	if ppu.DisplayEnabled() && ppu.coincidenceFlag() && ppu.coincidenceInterrupt() {
-		ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-	}
 }
 
 func (ppu *Ppu) Tick(ticks int) {
@@ -735,10 +762,6 @@ func (ppu *Ppu) Tick(ticks int) {
 
 	switch ppu.Mode {
 	case ACCESS_OAM:
-		if !ppu.wasModeInterruptTriggered && ppu.DisplayEnabled() && ppu.oamInterrupt() {
-			ppu.wasModeInterruptTriggered = true
-			ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-		}
 		if ppu.CycleCount >= CLOCKS_ACCESS_OAM {
 			ppu.CycleCount %= CLOCKS_ACCESS_OAM
 			ppu.setMode(ACCESS_VRAM)
@@ -750,17 +773,8 @@ func (ppu *Ppu) Tick(ticks int) {
 			ppu.GBC.DMA.SignalHdma()
 
 			ppu.writeScanline()
-			ppu.wasModeInterruptTriggered = false
-			if ppu.DisplayEnabled() && ppu.hblankInterrupt() {
-				ppu.wasModeInterruptTriggered = true
-				ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-			}
 		}
 	case HBLANK:
-		if !ppu.wasModeInterruptTriggered && ppu.DisplayEnabled() && ppu.hblankInterrupt() {
-			ppu.wasModeInterruptTriggered = true
-			ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-		}
 		if ppu.CycleCount >= CLOCKS_HBLANK {
 			ppu.CycleCount %= CLOCKS_HBLANK
 
@@ -777,26 +791,13 @@ func (ppu *Ppu) Tick(ticks int) {
 				ppu.FrameCount += 1
 				if ppu.DisplayEnabled() {
 					ppu.frontend.CommitScreen()
-
 					ppu.GBC.CPU.SetInterrupt(InterruptVBlank.Mask)
-					ppu.wasModeInterruptTriggered = false
-					if ppu.vblankInterrupt() {
-						ppu.wasModeInterruptTriggered = true
-						ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-					}
 				}
 			} else {
 				ppu.setMode(ACCESS_OAM)
-				if ppu.DisplayEnabled() && ppu.oamInterrupt() {
-					ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-				}
 			}
 		}
 	case VBLANK:
-		if !ppu.wasModeInterruptTriggered && ppu.DisplayEnabled() && ppu.vblankInterrupt() {
-			ppu.wasModeInterruptTriggered = true
-			ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-		}
 		if ppu.CycleCount >= CLOCKS_VBLANK {
 			ppu.CycleCount %= CLOCKS_VBLANK
 
@@ -807,13 +808,7 @@ func (ppu *Ppu) Tick(ticks int) {
 				ppu.LY = 0
 				ppu.WindowScanline = 0
 				ppu.checkCoincidenceLY_LYC()
-
 				ppu.setMode(ACCESS_OAM)
-				ppu.wasModeInterruptTriggered = false
-				if ppu.DisplayEnabled() && ppu.oamInterrupt() {
-					ppu.wasModeInterruptTriggered = true
-					ppu.GBC.CPU.SetInterrupt(InterruptLCDStat.Mask)
-				}
 			}
 		}
 	}

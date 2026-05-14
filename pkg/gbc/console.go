@@ -251,11 +251,11 @@ func (cons *Console) writeIO(addr uint16, value uint8) {
 	case addr == 0xFF04:
 		cons.timer.reset()
 	case addr == 0xFF05:
-		cons.timer.TIMA = value
+		cons.timer.writeTIMA(value)
 	case addr == 0xFF06:
 		cons.timer.TMA = value
 	case addr == 0xFF07:
-		cons.timer.TAC = value
+		cons.timer.setTAC(value)
 	case addr == 0xFF0F:
 		cons.CPU.IF = value
 	case 0xFF10 <= addr && addr <= 0xFF14:
@@ -284,15 +284,18 @@ func (cons *Console) writeIO(addr uint16, value uint8) {
 	case addr == 0xFF40:
 		cons.PPU.LCDC = value
 	case addr == 0xFF41:
-		cons.PPU.STAT = value
+		cons.PPU.STAT = (cons.PPU.STAT & 0x07) | (value & 0x78)
+		cons.PPU.updateSTATInterrupt()
 	case addr == 0xFF42:
 		cons.PPU.SCY = value
 	case addr == 0xFF43:
 		cons.PPU.SCX = value
 	case addr == 0xFF44:
 		cons.PPU.LY = 0
+		cons.PPU.checkCoincidenceLY_LYC()
 	case addr == 0xFF45:
 		cons.PPU.LYC = value
+		cons.PPU.checkCoincidenceLY_LYC()
 	case addr == 0xFF46:
 		cons.DMA.GbDmaCycles = 648
 		cons.DMA.GbDmaValue = value
@@ -550,10 +553,11 @@ func (cons *Console) innerStep() int {
 	cpuTicks := cons.CPU.ExecOne()
 	if cons.CPU.IsStopped {
 		if cons.CGBMode && cons.SpeedSwitch&1 == 1 {
+			cons.tickComponents(cpuTicks)
+			totTicks += cpuTicks
 			cons.SpeedSwitch = (cons.SpeedSwitch ^ 0x80) & 0x80
 			cons.DoubleSpeedMode = !cons.DoubleSpeedMode
 			cons.CPU.IsStopped = false
-			// FIXME: is this correct !? It should be totTicks+cpuTicks
 			return totTicks
 		}
 	}

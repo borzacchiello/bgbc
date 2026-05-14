@@ -280,7 +280,6 @@ func TestMooneyeIntr_2_0(t *testing.T) {
 }
 
 func TestMooneyeIntrStatIrq(t *testing.T) {
-	// This fails, but it proceeds further with respect to the previous version
 	runRomTest(t, "Mooneye/interrupts/stat_irq_blocking.gb", 1000)
 }
 

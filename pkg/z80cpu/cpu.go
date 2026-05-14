@@ -26,10 +26,11 @@ type Z80Cpu struct {
 	// InterruptEnable and InterruptFlag regs
 	IE, IF uint8
 
-	branchWasTaken    bool
-	IsHalted          bool
-	IsStopped         bool
-	interruptsEnabled bool
+	branchWasTaken       bool
+	IsHalted             bool
+	IsStopped            bool
+	interruptsEnabled    bool
+	interruptEnableDelay uint8
 
 	Interrupts []Z80Interrupt
 
@@ -54,6 +55,9 @@ func (cpu *Z80Cpu) Reset() {
 	cpu.PC = 0
 	cpu.OutBuffer = make([]byte, 0)
 	cpu.IsHalted = false
+	cpu.IsStopped = false
+	cpu.interruptsEnabled = false
+	cpu.interruptEnableDelay = 0
 }
 
 func panicIfErr(e error) {
@@ -82,6 +86,7 @@ func (cpu *Z80Cpu) Save(encoder *gob.Encoder) {
 	panicIfErr(encoder.Encode(cpu.IsHalted))
 	panicIfErr(encoder.Encode(cpu.IsStopped))
 	panicIfErr(encoder.Encode(cpu.interruptsEnabled))
+	panicIfErr(encoder.Encode(cpu.interruptEnableDelay))
 }
 
 func (cpu *Z80Cpu) Load(decoder *gob.Decoder) error {
@@ -105,6 +110,7 @@ func (cpu *Z80Cpu) Load(decoder *gob.Decoder) error {
 		decoder.Decode(&cpu.IsHalted),
 		decoder.Decode(&cpu.IsStopped),
 		decoder.Decode(&cpu.interruptsEnabled),
+		decoder.Decode(&cpu.interruptEnableDelay),
 	}
 
 	for _, err := range errs {
@@ -189,6 +195,13 @@ func (cpu *Z80Cpu) ExecOne() int {
 	cpu.branchWasTaken = false
 	handler := handlers[opcode]
 	handler(cpu)
+
+	if cpu.interruptEnableDelay > 0 {
+		cpu.interruptEnableDelay -= 1
+		if cpu.interruptEnableDelay == 0 {
+			cpu.interruptsEnabled = true
+		}
+	}
 
 	ticks := 0
 	if isCBOpcode {
@@ -847,10 +860,17 @@ func handler_jp_IF(cpu *Z80Cpu, dst uint16, cond bool) {
 // OTHER
 func handler_di(cpu *Z80Cpu) {
 	cpu.interruptsEnabled = false
+	cpu.interruptEnableDelay = 0
 }
 
 func handler_ei(cpu *Z80Cpu) {
+	cpu.interruptEnableDelay = 2
+}
+
+func handler_reti(cpu *Z80Cpu) {
+	handler_ret(cpu)
 	cpu.interruptsEnabled = true
+	cpu.interruptEnableDelay = 0
 }
 
 func handler_rst(cpu *Z80Cpu, val uint16) {
@@ -1111,7 +1131,7 @@ var handlers = [256]func(*Z80Cpu){
 	func(cpu *Z80Cpu) { handler_sub_R_8(cpu, &cpu.A, cpu.getPC8()) },                                // D6
 	func(cpu *Z80Cpu) { handler_rst(cpu, 16) },                                                      // D7
 	func(cpu *Z80Cpu) { handler_ret_IF(cpu, cpu.flagCarry) },                                        // D8
-	func(cpu *Z80Cpu) { handler_ret(cpu); handler_ei(cpu) },                                         // D9
+	func(cpu *Z80Cpu) { handler_reti(cpu) },                                                         // D9
 	func(cpu *Z80Cpu) { handler_jp_IF(cpu, cpu.getPC16(), cpu.flagCarry) },                          // DA
 	func(cpu *Z80Cpu) { handler_undefined(cpu, 0xdb) },                                              // DB
 	func(cpu *Z80Cpu) { handler_call_IF(cpu, cpu.flagCarry) },                                       // DC
