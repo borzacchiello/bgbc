@@ -3,5 +3,5 @@ ROMS/
 
 *.wasm
 *.exe
-borzgbc
+bgbc
 serialServer

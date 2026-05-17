@@ -3,7 +3,7 @@
 package main
 
 import (
-	"borzGBC/pkg/gbc"
+	"bgbc/pkg/gbc"
 	"encoding/base64"
 	"fmt"
 	"syscall/js"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"borzGBC/pkg/gbc"
+	"bgbc/pkg/gbc"
 )
 
 /*

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>borzgbc</title>
+    <title>bgbc</title>
 
     <style>
         :root {
@@ -328,7 +328,7 @@
 
         async function init_wasm() {
             goCtx = new Go();
-            var response = await fetch("./assets/borzgbc.wasm");
+            var response = await fetch("./assets/bgbc.wasm");
             var buffer = await response.arrayBuffer();
             var result = await WebAssembly.instantiate(buffer, goCtx.importObject);
             goCtx.run(result.instance);
@@ -558,7 +558,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="brand">borzgbc web player</div>
+            <div class="brand">bgbc web player</div>
             <p id="status">Loading emulator…</p>
         </div>
 

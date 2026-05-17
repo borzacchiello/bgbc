@@ -1,4 +1,4 @@
-# BorzGBC
+# bgbc
 
 Gameboy Color Emulator written in Go. Multiplatform and based in SDL.
 
@@ -10,7 +10,7 @@ To compile, just run `make` in the project directory. You need libsdl installed 
 
 To run the emulator, run:
 ```
-$ ./borzgbc /path/to/rom
+$ ./bgbc /path/to/rom
 ```
 
 ### Tests

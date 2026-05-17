@@ -1,7 +1,7 @@
 package main
 
 import (
-	"borzGBC/pkg/gbc"
+	"bgbc/pkg/gbc"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -319,7 +319,7 @@ func (pl *SDLPlugin) CommitScreen() {
 }
 
 func (pl *SDLPlugin) setTitle() {
-	title := "BorzGBC"
+	title := "bgbc"
 	if pl.fastMode > 0 {
 		title += fmt.Sprintf(" - fast x%d", pow2(pl.fastMode))
 	} else if pl.slowMode {

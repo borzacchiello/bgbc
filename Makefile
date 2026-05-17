@@ -1,13 +1,13 @@
-all: borzgbc serialServer
+all: bgbc serialServer
 
-serialServer: cmd/serial/serialServer.go
-	go build cmd/serial/serialServer.go
+serialServer: cmd/serial/main.go
+	go build -o serialServer cmd/serial/main.go
 
-borzgbc: cmd/sdl/borzgbc.go
-	go build cmd/sdl/borzgbc.go
+bgbc: cmd/sdl/main.go
+	go build -o bgbc cmd/sdl/main.go
 
-wasm: cmd/wasm/borzgbc.go
-	GOOS=js GOARCH=wasm go build -o web/assets/borzgbc.wasm cmd/wasm/borzgbc.go
+wasm: cmd/wasm/main.go
+	GOOS=js GOARCH=wasm go build -o web/assets/bgbc.wasm cmd/wasm/main.go
 
 clean:
-	rm -f borzgbc serialServer web/assets/borzgbc.wasm *.exe
+	rm -f bgbc serialServer web/assets/bgbc.wasm *.exe

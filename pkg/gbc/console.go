@@ -1,7 +1,7 @@
 package gbc
 
 import (
-	"borzGBC/pkg/z80cpu"
+	"bgbc/pkg/z80cpu"
 	"bytes"
 	"encoding/gob"
 	"fmt"
